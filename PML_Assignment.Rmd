@@ -1,0 +1,87 @@
+---
+title: "Practial Machine Learning Prgramming Assignment"
+author: "Marcia Lazo"
+date: "April 25, 2015"
+output: html_document
+---
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+Download the data
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+Load the data and some of the packages I will require to analyze the data
+```{r }
+setwd("~/Documents/DataScienceCoursera/PracticalMachineLearning")
+library(plyr)
+library(dplyr)
+library(caret)
+training <-read.csv("data/pml-training.csv", na.strings=c(""," ", "#DIV/0!","NA"), strip.white=TRUE)
+test_predict20<-read.csv("data/pml-testing.csv", na.strings=c(""," ", "#DIV/0!", "NA"), strip.white=TRUE)
+dim(training)
+```
+
+Take a look at the data. Summary is a long output. Uncomment it if you want to view the summary. I also used glimpse to get an idea of what was in each column.
+```{r}
+#summary(training);
+#colnames(t)
+glimpse(training);
+
+```
+
+Having looked at the data it needs some cleaning. There are columns with a great many NA's. I will remove all columns with those values. I also don't need the first seven columns with user information and timestamps. I transformed all columns except for the classe column into numeric columns
+
+```{r}
+training2 <- training[,-c(1:7)]
+trainingClean <- training2[, colSums(is.na(training2)) == 0]
+for (i in 1:52){
+  trainingClean[,i] <- as.numeric(as.character(trainingClean[,i]))
+}
+dim(trainingClean)
+
+```
+
+Subset the "training" data into train and test data, leaving the test_predict20 alone, as that is the data that the final model must be applied to for submission
+
+```{r}
+set.seed(1347)
+inTrain<-createDataPartition(y=trainingClean$classe,p=0.6,list=FALSE)
+traindata <- trainingClean[inTrain,]
+test<-trainingClean[-inTrain,]
+
+```
+
+I chose to use random forest for my prediction model because of its high accuracy/ small out of sample error. I would like an out of sample error of 3% or less. Given the test set of 20 samples that should be a small enough out of sample error to expect good prediction results. 
+
+Fit a model using caret's version of random forest, setting the cross validation to 5 and then predict on the testing data subset from original training data
+```{r training1}
+train_control = trainControl(method = "cv", number = 5)
+modFitrf <- train(classe~., data=traindata, method="rf", trControl = train_control, 
+                            allowParallel = TRUE, prox=TRUE)
+#modFitRPart<-train(classe~.,method="rpart",data=traindata)
+print(modFitrf)
+pred <- predict(modFitrf, newdata=test)
+test$predRight <- pred == test$classe
+table(pred, test$classe)
+
+```
+
+
+Accuracy is approximately 98.5 percent so out of sample error is roughly 1.5 percent. Given the small test set of 20 this is a high enough accuracy and low enough out of sample error that I expect the prediction for the test set to be accurate.
+
+
+Use the model created above to predict the classe for each of the 20 samples in the Test Set.
+
+```{r final test}
+predFinalTest <- predict(modFitrf, newdata = test_predict20)
+print(predFinalTest)
+```
+
